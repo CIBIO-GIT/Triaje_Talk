@@ -186,6 +186,110 @@ form {
     animation: fadeUp 0.35s ease;
 }
 
+#hoja1_login,
+#hoja1_registrarse {
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 8px 0;
+}
+
+#hoja1_login label,
+#hoja1_registrarse > label {
+    margin-top: 16px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+#hoja1_login button,
+#hoja1_registrarse button {
+    width: 100%;
+    margin-top: 12px;
+}
+
+.auth-title {
+    margin: 0 0 4px;
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+}
+/* Divisor "¿No tenés cuenta?" */
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 16px 0 0;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+/* Mensaje de éxito post-registro */
+.login-success {
+    min-height: 20px;
+    margin: 6px 0 0;
+    color: var(--success);
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+/* Botón secundario (outline) */
+button.btn-secondary {
+    background: transparent;
+    border: 2px solid rgba(31, 111, 178, 0.3);
+    box-shadow: none;
+}
+
+button.btn-secondary:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent)!important;
+    box-shadow: none;
+}
+
+/* Layout del formulario de registro */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 14px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    margin-top: 16px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+@media (max-width: 480px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.login-error {
+    min-height: 20px;    /* evita que el layout salte cuando aparece el error */
+    margin: 6px 0 0;
+    color: var(--danger);
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
 #hoja1 {
     display: block;
 }
@@ -267,6 +371,42 @@ input[type="range"] {
     margin: 0 10px;
     accent-color: var(--accent);
     cursor: pointer;
+}
+
+#dni,
+#password,
+#reg-mail,
+#reg-password,
+#reg-password2,
+#reg-nombre,
+#reg-apellido,
+#reg-dni {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-strong);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 1rem;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    box-sizing: border-box;
+    margin-bottom: 4px;
+}
+
+#dni:focus,
+#password:focus,
+#reg-mail:focus,
+#reg-password:focus,
+#reg-password2:focus,
+#reg-nombre:focus,
+#reg-apellido:focus,
+#reg-dni:focus
+{
+    outline: none;
+    border-color: rgba(31, 111, 178, 0.42);
+    box-shadow: 0 0 0 4px rgba(31, 111, 178, 0.12);
+    background: white;
 }
 
 /*deshabilitar el input de embarazo al seleccionar hombre*/

@@ -88,8 +88,113 @@ function showPage(pageId) {
     document.querySelectorAll('.survey-page').forEach(page => {
         page.style.display = 'none';
     });
+
+    const paginasSinScore = ['hoja1_login', 'hoja1_registrarse', 'hojaFinal']
+    document.getElementById("score-display").style.display = 
+        paginasSinScore.includes(pageId) ? 'none' : 'inline-flex';
+
     const activePage = document.getElementById(pageId);
     if (activePage) activePage.style.display = 'block';
+}
+
+/**
+ * Autenticación: valida DNI y contraseña contra el localStorage
+ * y guarda la sesión activa si las credenciales son correctas.
+ */
+function login() {
+    const dni = document.getElementById('dni').value.trim();
+    const password = document.getElementById('password').value;
+    const errorEl = document.getElementById('login-error');
+    const successEl = document.getElementById('login-success');
+
+    errorEl.textContent = '';
+    successEl.textContent = ''; // limpiar mensaje de registro exitoso
+
+    if (!dni || !password) {
+        errorEl.textContent = 'Completá el DNI y la contraseña.';
+        return;
+    }
+
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    const user  = users.find(u => u.dni === dni && u.password === password);
+
+    if (user) {
+        localStorage.setItem('currentSession', JSON.stringify({
+            dni:      user.dni,
+            nombre:   user.nombre,
+            apellido: user.apellido
+        }));
+        document.getElementById('score-display').style.display = 'flex';
+        showPage('hoja1');
+    } else {
+        errorEl.textContent = 'DNI o contraseña incorrectos.';
+    }
+}
+
+/**
+ * Valida el formulario, guarda el nuevo usuario en localStorage
+ * y redirige al login con un mensaje de éxito.
+ */
+function registrarse() {
+    const nombre = document.getElementById('reg-nombre').value.trim();
+    const apellido = document.getElementById('reg-apellido').value.trim();
+    const dni = document.getElementById('reg-dni').value;
+    const mail = document.getElementById('reg-mail').value.trim();
+    const password = document.getElementById('reg-password').value;
+    const password2 = document.getElementById('reg-password2').value;
+    const errorEl = document.getElementById('reg-error');
+
+    errorEl.textContent = '';
+
+    // Validaciones en orden
+    if (!nombre || !apellido || !dni || !mail || !password || !password2) {
+        errorEl.textContent = 'Completá todos los campos.';
+        return;
+    }
+    if (!/^\d{7,8}$/.test(dni)) {
+        errorEl.textContent = 'El DNI debe tener 7 u 8 dígitos numéricos, sin puntos.';
+        return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
+        errorEl.textContent = 'Ingresá un email válido.';
+        return;
+    }
+    if (password.length < 6) {
+        errorEl.textContent = 'La contraseña debe tener al menos 6 caracteres.';
+        return;
+    }
+    if (password !== password2) {
+        errorEl.textContent = 'Las contraseñas no coinciden.';
+        return;
+    }
+
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+
+    if (users.find(u => u.dni === dni)) {
+        errorEl.textContent = 'Ya existe una cuenta registrada con ese DNI.';
+        return;
+    }
+
+    // Guardar nuevo usuario
+    users.push({ dni, nombre, apellido, mail, password });
+    localStorage.setItem('users', JSON.stringify(users));
+
+    limpiarFormularioRegistro();
+
+    // Mostrar confirmación en la pantalla de login
+    document.getElementById('login-success').textContent =
+        `✓ Cuenta creada correctamente. Ya podés iniciar sesión, ${nombre} ${apellido}.`;
+    showPage('hoja1_login');
+}
+
+/**
+ * Limpia todos los campos del formulario de registro.
+ */
+function limpiarFormularioRegistro() {
+    ['reg-nombre', 'reg-apellido', 'reg-dni', 'reg-mail', 'reg-password', 'reg-password2']
+        .forEach(id => { document.getElementById(id).value = ''; });
+
+    document.getElementById('reg-error').textContent = '';
 }
 
 /**
@@ -172,7 +277,6 @@ function mostrarResultados() {
     triageElement.innerHTML = levelText;
     triageElement.style.color = levelColor;
 
-    document.getElementById('score-display').style.display = 'none';
     showPage('hojaFinal');
 }
 
@@ -221,7 +325,16 @@ function reiniciarEncuesta() {
 }
 
 // Inicialización
-document.addEventListener('DOMContentLoaded', () => showPage('hoja1'));
+document.addEventListener('DOMContentLoaded', () => {
+    const session = localStorage.getItem('currentSession');
+    if (session) {
+        // Si ya hay sesión activa, saltar directamente al formulario
+        document.getElementById('score-display').style.display = 'inline-flex';
+        showPage('hoja1');
+    } else {
+        showPage('hoja1_login');
+    }
+});
 const mainForm = document.getElementById('multiStepForm');
 mainForm.addEventListener('change', calculateScore);
 mainForm.addEventListener('input', calculateScore);

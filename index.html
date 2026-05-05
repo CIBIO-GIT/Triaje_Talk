@@ -27,6 +27,61 @@
         </section>
 
         <form id="multiStepForm" onsubmit="return false;">
+        
+        <div id="hoja1_login" class="survey-page">
+            <label for="dni">DNI</label>
+            <input type="number" placeholder="DNI" id="dni" name="dni" required>
+            <label for="password">Contraseña</label>
+            <input type="password" placeholder="Contraseña" id="password" name="password">
+            
+            <p id="login-error" class="login-error"></p>
+            <button type="button" onclick="login()">Iniciar sesión</button>
+            <p id="login-success" class="login-success"></p>
+            <div class="auth-divider"><span>¿No tenés cuenta?</span></div>
+            <button type="button" class="btn-secondary" onclick="showPage('hoja1_registrarse')">Registrarse</button>
+            
+        </div>
+
+        <div id="hoja1_registrarse" class="survey-page">
+
+            <h2 class="auth-title">Crear cuenta</h2>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="reg-nombre">Nombre</label>
+                    <input type="text" id="reg-nombre" placeholder="Tu nombre">
+                </div>
+                <div class="form-group">
+                    <label for="reg-apellido">Apellido</label>
+                    <input type="text" id="reg-apellido" placeholder="Tu apellido">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="reg-dni">DNI</label>
+                <input type="number" id="reg-dni" placeholder="Sin puntos ni espacios">
+            </div>
+
+            <div class="form-group">
+                <label for="reg-mail">Email</label>
+                <input type="email" id="reg-mail" placeholder="tu@email.com">
+            </div>
+
+            <div class="form-group">
+                <label for="reg-password">Contraseña</label>
+                <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres">
+            </div>
+
+            <div class="form-group">
+                <label for="reg-password2">Confirmar contraseña</label>
+                <input type="password" id="reg-password2" placeholder="Repetí tu contraseña">
+            </div>
+
+            <p id="reg-error" class="login-error"></p>
+
+            <button type="button" onclick="registrarse()">Crear cuenta</button>
+            <button type="button" class="btn-secondary" onclick="showPage('hoja1_login')">← Volver al inicio de sesión</button>
+        </div>
 
         <div id="hoja1" class="survey-page">
             <fieldset>
