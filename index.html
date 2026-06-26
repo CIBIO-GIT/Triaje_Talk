@@ -77,9 +77,46 @@
             <div class="nav-buttons">
                 <button type="button" onclick="showPage('hoja1')">&larr; Anterior</button>
                 <button type="button" onclick="showPage('hoja4_narrativa')">Narrar síntomas</button>
-                <button type="button" onclick="showPage('hoja3')">Iniciar test</button>
+                <button type="button" onclick="showPage('hoja2b')">Iniciar test</button>
             </div>
         </div>
+
+        <!-- Tiempo de evolucion -->
+<div id="hoja2b" class="survey-page">
+  <fieldset>
+    <legend>¿Hace cuánto empezaron los síntomas?</legend>
+    <div class="choice-group" style="flex-direction: column;">
+      <input type="radio" id="tiempo_1h"  name="tiempo_evolucion" value="0.5"  class="hidden-radio-choice">
+      <label for="tiempo_1h"  class="small-choice-button">Menos de 1 hora</label>
+
+      <input type="radio" id="tiempo_6h"  name="tiempo_evolucion" value="3"    class="hidden-radio-choice">
+      <label for="tiempo_6h"  class="small-choice-button">Entre 1 y 6 horas</label>
+
+      <input type="radio" id="tiempo_24h" name="tiempo_evolucion" value="12"   class="hidden-radio-choice">
+      <label for="tiempo_24h" class="small-choice-button">Entre 6 y 24 horas</label>
+
+      <input type="radio" id="tiempo_mas" name="tiempo_evolucion" value="48"   class="hidden-radio-choice">
+      <label for="tiempo_mas" class="small-choice-button">Más de 24 horas</label>
+    </div>
+  </fieldset>
+  <div class="nav-buttons">
+    <button type="button" onclick="showPage('hoja2')">&larr; Anterior</button>
+    <button type="button" onclick="showPage('hoja2c')">Siguiente &rarr;</button>
+  </div>
+</div>
+
+<!-- NUEVA Hoja 2c: Factores de riesgo -->
+<div id="hoja2c" class="survey-page">
+  <fieldset>
+    <legend>Antecedentes médicos relevantes</legend>
+    <p>Marcá todos los que correspondan (opcional):</p>
+    <div id="contenedor-factores-riesgo"></div>
+  </fieldset>
+  <div class="nav-buttons">
+    <button type="button" onclick="showPage('hoja2b')">&larr; Anterior</button>
+    <button type="button" onclick="showPage('hoja3')">Siguiente &rarr;</button>
+  </div>
+</div>
 
         <div id="hoja3" class="survey-page">
             <fieldset>

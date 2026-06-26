@@ -58,6 +58,7 @@ function renderizarSintomas() {
             });
         }
     });
+    renderizarFactoresRiesgo();
 }
 
 /**
@@ -105,49 +106,98 @@ function updateEdadOutput(value) {
  */
 
 
+function renderizarFactoresRiesgo() {
+  const config = sintomasScore.config_factores_riesgo;
+  if (!config) return;
+  const contenedor = document.getElementById('contenedor-factores-riesgo');
+  if (!contenedor) return;
+  contenedor.innerHTML = '';
+  config.items.forEach(item => {
+    const div = document.createElement('div');
+    div.style.marginBottom = '8px';
+    div.innerHTML = `
+      <input type="checkbox" id="${item.id}" onchange="calculateScore()">
+      <label for="${item.id}">${item.texto}</label>
+    `;
+    contenedor.appendChild(div);
+  });
+}
+
 function calculateScore() {
-    let totalScore = 0;
-    const config = sintomasScore.config_puntajes; // Acceso a la nueva configuración
+  const config    = sintomasScore.config_puntajes;
+  const cfgTiempo = sintomasScore.config_tiempo;
+  const cfgFR     = sintomasScore.config_factores_riesgo;
+  const cfgCombos = sintomasScore.config_combinaciones;
+  let totalScore  = 0;
 
-    if (config) {
-        // 1. Puntaje por Edad Dinámico
-        let edad = parseInt(document.getElementById('edad').value) || 0;
-        const rangoEncontrado = config.edad.find(rango => edad >= rango.min && edad <= rango.max);
-        if (rangoEncontrado) {
-            totalScore += rangoEncontrado.puntos;
-        }
+  // --- 1. Puntaje base (igual que antes) ---
+  if (config) {
+    let edad = parseInt(document.getElementById('edad').value) || 0;
+    const rango = config.edad.find(r => edad >= r.min && edad <= r.max);
+    if (rango) totalScore += rango.puntos;
+    if (document.getElementById('emb_si').checked)      totalScore += config.embarazo;
+    if (document.getElementById('sintomas_si').checked) totalScore += config.graves;
+  }
 
-        // 2. Embarazo Dinámico
-        if (document.getElementById('emb_si').checked) {
-            totalScore += config.embarazo;
-        }
-
-        // 3. Síntomas Graves Dinámico
-        if (document.getElementById('sintomas_si').checked) {
-            totalScore += config.graves;
-        }
+  // --- 2. Síntomas padre/hijo ---
+  const sintomasMarcados = new Set();
+  Object.entries(sintomasScore).forEach(([idPadre, info]) => {
+    if (!idPadre.startsWith('p_')) return;
+    const checkPadre = document.getElementById(idPadre);
+    if (checkPadre && checkPadre.checked) {
+      totalScore += (info.score || 0);
+      sintomasMarcados.add(idPadre);
+      if (info.children) {
+        Object.entries(info.children).forEach(([idHijo, infoHijo]) => {
+          const checkHijo = document.getElementById(idHijo);
+          if (checkHijo && checkHijo.checked) {
+            totalScore += (infoHijo.score || 0);
+            sintomasMarcados.add(idHijo);
+          }
+        });
+      }
     }
+  });
 
-    // 4. Síntomas Dinámicos (Padres e Hijos) - Se mantiene igual
-    Object.entries(sintomasScore).forEach(([idPadre, info]) => {
-        // Filtramos para no procesar la "config_puntajes" como si fuera un síntoma
-        if (idPadre.startsWith('p_')) { 
-            const checkPadre = document.getElementById(idPadre);
-            if (checkPadre && checkPadre.checked) {
-                totalScore += (info.score || 0);
-                if (info.children) {
-                    Object.entries(info.children).forEach(([idHijo, infoHijo]) => {
-                        const checkHijo = document.getElementById(idHijo);
-                        if (checkHijo && checkHijo.checked) {
-                            totalScore += (infoHijo.score || 0);
-                        }
-                    });
-                }
-            }
-        }
+  // --- 3. NUEVO: Multiplicador de combinaciones sinérgicas ---
+  let bonoCombos = 0;
+  if (cfgCombos) {
+    cfgCombos.sinergias.forEach(sinergia => {
+      const todasMarcadas = sinergia.requiere.every(id => sintomasMarcados.has(id));
+      if (todasMarcadas) {
+        // Suma el extra proporcional (factor - 1) sobre el score actual
+        bonoCombos = Math.max(bonoCombos, totalScore * (sinergia.factor - 1));
+      }
     });
+  }
+  totalScore += Math.round(bonoCombos);
 
-    document.getElementById('score-value').innerText = totalScore;
+  // --- 4. NUEVO: Modificador temporal ---
+  if (cfgTiempo) {
+    const tiempoHoras = parseFloat(
+      document.querySelector('input[name="tiempo_evolucion"]:checked')?.value || 3
+    );
+    const rangoTiempo = cfgTiempo.rangos.find(r => tiempoHoras <= r.max_horas);
+    if (rangoTiempo) totalScore = Math.round(totalScore * rangoTiempo.factor);
+  }
+
+  // --- 5. NUEVO: Amplificador de factores de riesgo cardiovascular ---
+  if (cfgFR) {
+    const sintomasCardioActivos = cfgFR.aplica_a.some(id => sintomasMarcados.has(id));
+    if (sintomasCardioActivos) {
+      let amplificadorFR = 1.0;
+      cfgFR.items.forEach(item => {
+        const check = document.getElementById(item.id);
+        if (check && check.checked) amplificadorFR *= item.peso;
+      });
+      if (amplificadorFR > 1.0) {
+        totalScore = Math.round(totalScore * Math.min(amplificadorFR, 3.0));
+        // cap en 3x para evitar puntajes absurdos
+      }
+    }
+  }
+
+  document.getElementById('score-value').innerText = totalScore;
 }
 
 
