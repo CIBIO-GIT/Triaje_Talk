@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agente Triage - Encuesta Médica</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
     <header class="hospital-container">
@@ -27,188 +29,207 @@
         </section>
 
         <form id="multiStepForm" onsubmit="return false;">
-        
-        <div id="hoja1_login" class="survey-page">
-            <label for="dni">DNI</label>
-            <input type="number" placeholder="DNI" id="dni" name="dni" required>
-            <label for="password">Contraseña</label>
-            <input type="password" placeholder="Contraseña" id="password" name="password">
-            
-            <p id="login-error" class="login-error"></p>
-            <button type="button" onclick="login()">Iniciar sesión</button>
-            <p id="login-success" class="login-success"></p>
-            <div class="auth-divider"><span>¿No tenés cuenta?</span></div>
-            <button type="button" class="btn-secondary" onclick="showPage('hoja1_registrarse')">Registrarse</button>
-            
-        </div>
 
-        <div id="hoja1_registrarse" class="survey-page">
+            <div id="hoja1_login" class="survey-page">
+                <label for="dni">DNI</label>
+                <input type="number" placeholder="DNI" id="dni" name="dni" required>
+                <label for="password">Contraseña</label>
+                <input type="password" placeholder="Contraseña" id="password" name="password">
 
-            <h2 class="auth-title">Crear cuenta</h2>
+                <p id="login-error" class="login-error"></p>
+                <button type="button" onclick="login()">Iniciar sesión</button>
+                <p id="login-success" class="login-success"></p>
+                <div class="auth-divider"><span>¿No tenés cuenta?</span></div>
+                <button type="button" class="btn-secondary" onclick="showPage('hoja1_registrarse')">Registrarse</button>
 
-            <div class="form-row">
+            </div>
+
+            <div id="hoja1_registrarse" class="survey-page">
+
+                <h2 class="auth-title">Crear cuenta</h2>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="reg-nombre">Nombre</label>
+                        <input type="text" id="reg-nombre" placeholder="Tu nombre">
+                    </div>
+                    <div class="form-group">
+                        <label for="reg-apellido">Apellido</label>
+                        <input type="text" id="reg-apellido" placeholder="Tu apellido">
+                    </div>
+                </div>
+
                 <div class="form-group">
-                    <label for="reg-nombre">Nombre</label>
-                    <input type="text" id="reg-nombre" placeholder="Tu nombre">
+                    <label for="reg-dni">DNI</label>
+                    <input type="number" id="reg-dni" placeholder="Sin puntos ni espacios">
                 </div>
+
                 <div class="form-group">
-                    <label for="reg-apellido">Apellido</label>
-                    <input type="text" id="reg-apellido" placeholder="Tu apellido">
+                    <label for="reg-mail">Email</label>
+                    <input type="email" id="reg-mail" placeholder="tu@email.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="reg-password">Contraseña</label>
+                    <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres">
+                </div>
+
+                <div class="form-group">
+                    <label for="reg-password2">Confirmar contraseña</label>
+                    <input type="password" id="reg-password2" placeholder="Repetí tu contraseña">
+                </div>
+
+                <p id="reg-error" class="login-error"></p>
+
+                <button type="button" onclick="registrarse()">Crear cuenta</button>
+                <button type="button" class="btn-secondary" onclick="showPage('hoja1_login')">← Volver al inicio de
+                    sesión</button>
+            </div>
+
+            <div id="hoja1" class="survey-page">
+                <fieldset>
+                    <legend>Hoja 1: Identificación</legend>
+                    <label class="intro-question">¿Quién está respondiendo?</label>
+
+                    <input type="radio" id="paciente" name="respondiente" value="paciente" required
+                        class="hidden-radio-choice">
+                    <label for="paciente" class="big-choice-button" onclick="showPage('hoja2')">
+                        YO (Paciente)
+                    </label>
+
+                    <input type="radio" id="acompanante" name="respondiente" value="acompanante"
+                        class="hidden-radio-choice">
+                    <label for="acompanante" class="big-choice-button" onclick="showPage('hoja2')">
+                        Un Acompañante
+                    </label>
+                </fieldset>
+            </div>
+
+            <div id="hoja2" class="survey-page">
+                <fieldset>
+                    <legend>Hoja 2: Datos del Paciente</legend>
+
+                    <label for="edad">¿Edad? <span id="edad-output">30</span> años</label>
+                    <div class="range-slider-container">
+                        <span>&lt; 1</span>
+                        <input type="range" id="edad" name="edad" min="0" max="100" value="30"
+                            oninput="updateEdadOutput(this.value)">
+                        <span>99+</span>
+                    </div>
+
+                    <label style="margin-top: 20px;">¿Sexo?</label>
+                    <div class="choice-group">
+                        <input type="radio" id="mujer" name="sexo" value="mujer" required class="hidden-radio-choice"
+                            onchange="hayEmbarazo()">
+                        <label for="mujer" class="small-choice-button">Mujer</label>
+
+                        <input type="radio" id="hombre" name="sexo" value="hombre" class="hidden-radio-choice"
+                            onchange="hayEmbarazo()">
+                        <label for="hombre" class="small-choice-button">Hombre</label>
+                    </div>
+
+                    <label style="margin-top: 20px;">¿Embarazo?</label>
+                    <div class="choice-group">
+                        <input type="radio" id="emb_si" name="embarazo" value="si" class="hidden-radio-choice">
+                        <label for="emb_si" class="small-choice-button">Sí</label>
+
+                        <input type="radio" id="emb_no" name="embarazo" value="no" class="hidden-radio-choice">
+                        <label for="emb_no" class="small-choice-button">No</label>
+                    </div>
+                </fieldset>
+                <div class="nav-buttons">
+                    <button type="button" onclick="showPage('hoja1')">&larr; Anterior</button>
+                    <button type="button" onclick="showPage('hoja4_narrativa')">Narrar síntomas</button>
+                    <button type="button" onclick="showPage('hoja3')">Iniciar test</button>
                 </div>
             </div>
 
-            <div class="form-group">
-                <label for="reg-dni">DNI</label>
-                <input type="number" id="reg-dni" placeholder="Sin puntos ni espacios">
-            </div>
+            <div id="hoja3" class="survey-page">
+                <fieldset>
+                    <legend>Hoja 3: Síntomas Graves</legend>
+                    <label>¿Tiene alguno de estos síntomas?</label>
+                    <ul>
+                        <li>Pérdida de conocimiento</li>
+                        <li>Dificultad para Respirar</li>
+                        <li>Sangrado Activo</li>
+                        <li>Piel muy fría</li>
+                    </ul>
 
-            <div class="form-group">
-                <label for="reg-mail">Email</label>
-                <input type="email" id="reg-mail" placeholder="tu@email.com">
-            </div>
+                    <div class="choice-group">
+                        <input type="radio" id="sintomas_si" name="sintomas_graves" value="si" required
+                            class="hidden-radio-choice">
+                        <label for="sintomas_si" class="small-choice-button">Sí</label>
 
-            <div class="form-group">
-                <label for="reg-password">Contraseña</label>
-                <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres">
-            </div>
-
-            <div class="form-group">
-                <label for="reg-password2">Confirmar contraseña</label>
-                <input type="password" id="reg-password2" placeholder="Repetí tu contraseña">
-            </div>
-
-            <p id="reg-error" class="login-error"></p>
-
-            <button type="button" onclick="registrarse()">Crear cuenta</button>
-            <button type="button" class="btn-secondary" onclick="showPage('hoja1_login')">← Volver al inicio de sesión</button>
-        </div>
-
-        <div id="hoja1" class="survey-page">
-            <fieldset>
-                <legend>Hoja 1: Identificación</legend>
-                <label class="intro-question">¿Quién está respondiendo?</label>
-                
-                <input type="radio" id="paciente" name="respondiente" value="paciente" required class="hidden-radio-choice">
-                <label for="paciente" class="big-choice-button" onclick="showPage('hoja2')">
-                    YO (Paciente)
-                </label>
-                
-                <input type="radio" id="acompanante" name="respondiente" value="acompanante" class="hidden-radio-choice">
-                <label for="acompanante" class="big-choice-button" onclick="showPage('hoja2')">
-                    Un Acompañante
-                </label>
-            </fieldset>
-        </div>
-
-        <div id="hoja2" class="survey-page">
-            <fieldset>
-                <legend>Hoja 2: Datos del Paciente</legend>
-
-                <label for="edad">¿Edad? <span id="edad-output">30</span> años</label>
-                <div class="range-slider-container">
-                    <span>&lt; 1</span> 
-                    <input type="range" id="edad" name="edad" min="0" max="100" value="30" oninput="updateEdadOutput(this.value)">
-                    <span>99+</span> 
+                        <input type="radio" id="sintomas_no" name="sintomas_graves" value="no"
+                            class="hidden-radio-choice">
+                        <label for="sintomas_no" class="small-choice-button">No</label>
+                    </div>
+                </fieldset>
+                <div class="nav-buttons">
+                    <button type="button" onclick="showPage('hoja2')">&larr; Anterior</button>
+                    <button type="button" onclick="showPage('hoja4')">Siguiente &rarr;</button>
                 </div>
-                
-                <label style="margin-top: 20px;">¿Sexo?</label>
-                <div class="choice-group">
-                    <input type="radio" id="mujer" name="sexo" value="mujer" required class="hidden-radio-choice" onchange="hayEmbarazo()">
-                    <label for="mujer" class="small-choice-button">Mujer</label>
-                    
-                    <input type="radio" id="hombre" name="sexo" value="hombre" class="hidden-radio-choice" onchange="hayEmbarazo()">
-                    <label for="hombre" class="small-choice-button">Hombre</label>
+            </div>
+
+
+            <div id="hoja4" class="survey-page">
+                <fieldset>
+                    <legend>Hoja 4: Problema Principal</legend>
+                    <p>(Puedes elegir uno o más)</p>
+                    <div id="contenedor-sintomas"></div>
+                </fieldset>
+
+                <div class="nav-buttons">
+                    <button type="button" onclick="showPage('hoja3')">&larr; Anterior</button>
+                    <button type="button" onclick="mostrarResultados()">Ver resultados</button>
+                </div>
+            </div>
+
+
+            <div id="hoja4_narrativa" class="survey-page">
+                <fieldset>
+                    <legend>Hoja 4: Narración de Síntomas</legend>
+                    <label for="narrativa">Por favor, describe detalladamente tus síntomas, cuándo comenzaron y qué has
+                        hecho al respecto:</label>
+                    <textarea id="narrativa" name="narrativa" rows="8"
+                        placeholder="Ej: Dolor en el pecho que comenzó hace 3 horas..."></textarea>
+                    <button type="button" id="voice-narrative-btn" onclick="narrarsintomasPorVoz()"
+                        class="voice-btn">
+                        Narrar sintomas con voz
+                    </button>
+                    <p id="voice-status" class="voice-status"></p>
+                </fieldset>
+
+                <div id="narrative-buttons" class="nav-buttons">
+                    <button type="button" onclick="showPage('hoja2')">&larr; Anterior</button>
+                    <button type="button" id="send-narrative-btn" onclick="enviarNarrativa()"
+                        class="submit-button">Enviar al Triage</button>
                 </div>
 
-                <label style="margin-top: 20px;">¿Embarazo?</label>
-                <div class="choice-group">
-                    <input type="radio" id="emb_si" name="embarazo" value="si" class="hidden-radio-choice">
-                    <label for="emb_si" class="small-choice-button">Sí</label>
-                    
-                    <input type="radio" id="emb_no" name="embarazo" value="no" class="hidden-radio-choice">
-                    <label for="emb_no" class="small-choice-button">No</label>
+                <div id="after-send-message" style="display: none; text-align: center; margin-top: 20px;">
+                    <p style="font-weight: bold; color: #28a745;">✅ Narración enviada. Recibirás una respuesta pronto.
+                    </p>
+                    <button type="button" onclick="reiniciarEncuesta()"
+                        style="background-color: #007bff; color: white;">Nuevo Triaje</button>
                 </div>
-            </fieldset>
-            <div class="nav-buttons">
-                <button type="button" onclick="showPage('hoja1')">&larr; Anterior</button>
-                <button type="button" onclick="showPage('hoja4_narrativa')">Narrar síntomas</button>
-                <button type="button" onclick="showPage('hoja3')">Iniciar test</button>
             </div>
-        </div>
 
-        <div id="hoja3" class="survey-page">
-            <fieldset>
-                <legend>Hoja 3: Síntomas Graves</legend>
-                <label>¿Tiene alguno de estos síntomas?</label>
-                <ul>
-                    <li>Pérdida de conocimiento</li>
-                    <li>Dificultad para Respirar</li>
-                    <li>Sangrado Activo</li>
-                    <li>Piel muy fría</li>
-                </ul>
-                
-                <div class="choice-group">
-                    <input type="radio" id="sintomas_si" name="sintomas_graves" value="si" required class="hidden-radio-choice">
-                    <label for="sintomas_si" class="small-choice-button">Sí</label>
-                    
-                    <input type="radio" id="sintomas_no" name="sintomas_graves" value="no" class="hidden-radio-choice">
-                    <label for="sintomas_no" class="small-choice-button">No</label>
+            <div id="hojaFinal" class="survey-page">
+                <fieldset>
+                    <legend>Resultados de la Encuesta</legend>
+                    <h2 style="text-align: center;">Puntaje Total de Peligro:</h2>
+                    <span id="final-score-value">0</span>
+                    <h2 id="final-triage-level" style="text-align: center; margin-top: 20px;"></h2>
+                </fieldset>
+                <div class="nav-buttons center-button">
+                    <button type="button" onclick="reiniciarEncuesta()">Reiniciar Encuesta</button>
                 </div>
-            </fieldset>
-            <div class="nav-buttons">
-                <button type="button" onclick="showPage('hoja2')">&larr; Anterior</button>
-                <button type="button" onclick="showPage('hoja4')">Siguiente &rarr;</button>
             </div>
-        </div>
-        
-
-        <div id="hoja4" class="survey-page">
-            <fieldset>
-                <legend>Hoja 4: Problema Principal</legend>
-                <p>(Puedes elegir uno o más)</p>
-                <div id="contenedor-sintomas"></div>
-            </fieldset>
-
-            <div class="nav-buttons">
-                <button type="button" onclick="showPage('hoja3')">&larr; Anterior</button>
-                <button type="button" onclick="mostrarResultados()">Ver resultados</button>
-            </div>
-        </div>
-
-
-        <div id="hoja4_narrativa" class="survey-page">
-            <fieldset>
-                <legend>Hoja 4: Narración de Síntomas</legend>
-                <label for="narrativa">Por favor, describe detalladamente tus síntomas, cuándo comenzaron y qué has hecho al respecto:</label>
-                <textarea id="narrativa" name="narrativa" rows="8" placeholder="Ej: Dolor en el pecho que comenzó hace 3 horas..."></textarea>
-            </fieldset>
-            
-            <div id="narrative-buttons" class="nav-buttons">
-                <button type="button" onclick="showPage('hoja2')">&larr; Anterior</button>
-                <button type="button" id="send-narrative-btn" onclick="enviarNarrativa()" class="submit-button">Enviar al Triage</button>
-            </div>
-
-            <div id="after-send-message" style="display: none; text-align: center; margin-top: 20px;">
-                <p style="font-weight: bold; color: #28a745;">✅ Narración enviada. Recibirás una respuesta pronto.</p>
-                <button type="button" onclick="reiniciarEncuesta()" style="background-color: #007bff; color: white;">Nuevo Triaje</button>
-            </div>
-        </div>
-
-        <div id="hojaFinal" class="survey-page">
-            <fieldset>
-                <legend>Resultados de la Encuesta</legend>
-                <h2 style="text-align: center;">Puntaje Total de Peligro:</h2>
-                <span id="final-score-value">0</span>
-                <h2 id="final-triage-level" style="text-align: center; margin-top: 20px;"></h2>
-            </fieldset>
-            <div class="nav-buttons center-button">
-                <button type="button" onclick="reiniciarEncuesta()">Reiniciar Encuesta</button>
-            </div>
-        </div>
 
         </form>
     </main>
 
     <script src="scripts.js"></script>
 </body>
+
 </html>

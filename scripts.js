@@ -2,12 +2,12 @@ let sintomasScore = {};
 
 // 1. CARGA INICIAL Y RENDERIZADO DINÁMICO
 fetch("sintomas.json")
-  .then(res => res.json())
-  .then(data => {
-    sintomasScore = data;
-    renderizarSintomas(); // Genera la Hoja 4 automáticamente
-  })
-  .catch(err => console.error("Error cargando sintomas.json", err));
+    .then(res => res.json())
+    .then(data => {
+        sintomasScore = data;
+        renderizarSintomas(); // Genera la Hoja 4 automáticamente
+    })
+    .catch(err => console.error("Error cargando sintomas.json", err));
 
 /**
  * Genera el HTML de la Hoja 4 basándose en el JSON.
@@ -47,7 +47,7 @@ function renderizarSintomas() {
             const subContenedor = divPadre.querySelector(`#sub_${idPadre}`);
             Object.entries(info.children).forEach(([idHijo, infoHijo]) => {
                 const nombreHijo = (typeof infoHijo === 'object' ? infoHijo.texto : idHijo.replace(/_/g, ' '));
-                
+
                 const divHijo = document.createElement('div');
                 divHijo.style.marginBottom = "5px";
                 divHijo.innerHTML = `
@@ -66,11 +66,11 @@ function renderizarSintomas() {
 function toggleHijos(idPadre) {
     const checkboxPadre = document.getElementById(idPadre);
     const subContenedor = document.getElementById(`sub_${idPadre}`);
-    
+
     if (subContenedor) {
         // CAMBIO: Usamos 'grid' para activar las dos columnas del CSS
         subContenedor.style.display = checkboxPadre.checked ? 'grid' : 'none';
-        
+
         // Si desmarcamos al padre, desmarcamos automáticamente a todos los hijos
         if (!checkboxPadre.checked) {
             const hijos = subContenedor.querySelectorAll('input[type="checkbox"]');
@@ -90,7 +90,7 @@ function showPage(pageId) {
     });
 
     const paginasSinScore = ['hoja1_login', 'hoja1_registrarse', 'hojaFinal']
-    document.getElementById("score-display").style.display = 
+    document.getElementById("score-display").style.display =
         paginasSinScore.includes(pageId) ? 'none' : 'inline-flex';
 
     const activePage = document.getElementById(pageId);
@@ -116,12 +116,12 @@ function login() {
     }
 
     const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const user  = users.find(u => u.dni === dni && u.password === password);
+    const user = users.find(u => u.dni === dni && u.password === password);
 
     if (user) {
         localStorage.setItem('currentSession', JSON.stringify({
-            dni:      user.dni,
-            nombre:   user.nombre,
+            dni: user.dni,
+            nombre: user.nombre,
             apellido: user.apellido
         }));
         document.getElementById('score-display').style.display = 'flex';
@@ -236,7 +236,7 @@ function calculateScore() {
     // 4. Síntomas Dinámicos (Padres e Hijos) - Se mantiene igual
     Object.entries(sintomasScore).forEach(([idPadre, info]) => {
         // Filtramos para no procesar la "config_puntajes" como si fuera un síntoma
-        if (idPadre.startsWith('p_')) { 
+        if (idPadre.startsWith('p_')) {
             const checkPadre = document.getElementById(idPadre);
             if (checkPadre && checkPadre.checked) {
                 totalScore += (info.score || 0);
@@ -299,12 +299,12 @@ function enviarNarrativa() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)
     })
-    .then(() => {
-        document.getElementById('narrative-buttons').style.display = 'none';
-        document.getElementById('narrativa').disabled = true;
-        document.getElementById('after-send-message').style.display = 'block';
-    })
-    .catch(err => console.error("Error al enviar:", err));
+        .then(() => {
+            document.getElementById('narrative-buttons').style.display = 'none';
+            document.getElementById('narrativa').disabled = true;
+            document.getElementById('after-send-message').style.display = 'block';
+        })
+        .catch(err => console.error("Error al enviar:", err));
 }
 
 /**
@@ -316,10 +316,24 @@ function reiniciarEncuesta() {
     document.getElementById('narrativa').disabled = false;
     document.getElementById('narrative-buttons').style.display = 'block';
     document.getElementById('after-send-message').style.display = 'none';
-    
+
+    // Resetear el estado del botón de voz
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+    mediaRecorder = null;
+    isRecording = false;
+    const voiceBtn = document.getElementById('voice-narrative-btn');
+    if (voiceBtn) {
+        voiceBtn.classList.remove('recording');
+        voiceBtn.disabled = false;
+        voiceBtn.textContent = 'Narrar sintomas con voz';
+    }
+    setVoiceStatus('', '');
+
     // Ocultar todos los subcontenedores de síntomas
     document.querySelectorAll('.hijos-container').forEach(c => c.style.display = 'none');
-    
+
     calculateScore();
     showPage('hoja1');
 }
@@ -342,7 +356,7 @@ mainForm.addEventListener('input', calculateScore);
 //funcion para habilitar el embarazo solo si es mujer:
 function hayEmbarazo() {
     const esHombre = document.getElementById('hombre').checked;
-    
+
     const embSi = document.getElementById('emb_si');
     const embNo = document.getElementById('emb_no');
 
@@ -358,5 +372,106 @@ function hayEmbarazo() {
         // Habilitar
         embSi.disabled = false;
         embNo.disabled = false;
+    }
+}
+
+// 5. NARRACIÓN POR VOZ (Whisper)
+
+// uso proxy para probar, para producción usar n8n
+const WHISPER_URL = 'http://127.0.0.1:9100/asr';
+const WHISPER_LANGUAGE = 'es';
+
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+
+function setVoiceStatus(message, type = '') {
+    const statusEl = document.getElementById('voice-status');
+    if (!statusEl) return;
+    statusEl.textContent = message;
+    statusEl.className = 'voice-status' + (type ? ' ' + type : '');
+}
+
+/**
+ * Inicia o detiene la grabación de voz (toggle).
+ * Al detener, envía el audio a Whisper y vuelca la transcripción al textarea.
+ */
+async function narrarsintomasPorVoz() {
+    const btn = document.getElementById('voice-narrative-btn');
+    if (!btn) return;
+
+    if (!isRecording) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                stream.getTracks().forEach(t => t.stop());
+                const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+                transcribirAudio(blob);
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+
+            btn.classList.add('recording');
+            btn.disabled = false;
+            btn.textContent = 'Detener grabacion';
+            setVoiceStatus('Grabando… hablá con normalidad. Tocá el botón para detener.', 'recording');
+        } catch (err) {
+            setVoiceStatus('No se pudo acceder al micrófono. Revisá los permisos del navegador.', 'error');
+        }
+    } else {
+        isRecording = false;
+        btn.disabled = true;
+        btn.textContent = 'Transcribiendo…';
+        setVoiceStatus('Transcribiendo audio…', '');
+        mediaRecorder.stop();
+    }
+}
+
+/**
+ * Envía el audio grabado a la API de Whisper y coloca la transcripción
+ * en el textarea de la narración (reemplaza siempre el contenido).
+ */
+async function transcribirAudio(blob) {
+    const btn = document.getElementById('voice-narrative-btn');
+    const formData = new FormData();
+    formData.append('audio_file', blob, 'audio.webm');
+
+    const params = new URLSearchParams({
+        encode: 'true',
+        task: 'transcribe',
+        language: WHISPER_LANGUAGE,
+        output: 'txt'
+    });
+
+    try {
+        const response = await fetch(`${WHISPER_URL}?${params}`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error(`Whisper respondió ${response.status}`);
+        }
+
+        const transcription = await response.text();
+        document.getElementById('narrativa').value = transcription;
+        setVoiceStatus('Transcripción lista. Revisá y corregí el texto antes de enviar.', 'success');
+    } catch (err) {
+        console.error('Error al transcribir:', err);
+        setVoiceStatus('No se pudo transcribir el audio. Verificá que Whisper esté corriendo en el puerto 9000.', 'error');
+    } finally {
+        if (btn) {
+            btn.classList.remove('recording');
+            btn.disabled = false;
+            btn.textContent = 'Narrar sintomas con voz';
+        }
     }
 }

@@ -740,3 +740,66 @@ button:disabled {
         gap: 0;
     }
 }
+
+/* 5. Botón de narración por voz */
+#hoja4_narrativa .voice-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    margin-top: 12px;
+    background: linear-gradient(135deg, #8a4fc8, #5e2f94);
+    color: white;
+    box-shadow: var(--shadow-sm);
+}
+
+#hoja4_narrativa .voice-btn::before {
+    content: "🎤";
+    font-size: 1.1rem;
+}
+
+#hoja4_narrativa .voice-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(94, 47, 148, 0.28);
+}
+
+#hoja4_narrativa .voice-btn.recording {
+    background: linear-gradient(135deg, var(--danger), #a83232);
+    animation: voicePulse 1.4s ease-in-out infinite;
+}
+
+#hoja4_narrativa .voice-btn.recording::before {
+    content: "⏺";
+}
+
+@keyframes voicePulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(204, 75, 75, 0.45);
+    }
+    50% {
+        box-shadow: 0 0 0 14px rgba(204, 75, 75, 0);
+    }
+}
+
+/* Mensaje de estado de la narración por voz */
+.voice-status {
+    min-height: 20px;
+    margin: 8px 0 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.voice-status.recording {
+    color: var(--danger);
+}
+
+.voice-status.success {
+    color: var(--success);
+}
+
+.voice-status.error {
+    color: var(--danger);
+}
