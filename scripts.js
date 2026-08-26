@@ -378,7 +378,7 @@ function hayEmbarazo() {
 // 5. NARRACIÓN POR VOZ (Whisper)
 
 // uso proxy para probar, para producción usar n8n
-const WHISPER_URL = 'http://127.0.0.1:9100/asr';
+const WHISPER_URL = 'http://127.0.0.1:9000/asr';
 const WHISPER_LANGUAGE = 'es';
 
 let mediaRecorder = null;
