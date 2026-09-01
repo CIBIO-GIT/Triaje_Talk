@@ -6,7 +6,7 @@ let sintomasScore = {};
 const APP_CONFIG_RESOLVED = (typeof window !== 'undefined' && window.APP_CONFIG) ? window.APP_CONFIG : {};
 const SINTOMAS_URL = APP_CONFIG_RESOLVED.SINTOMAS_URL || "sintomas.json";
 const TRIAGE_ENDPOINT = APP_CONFIG_RESOLVED.TRIAGE_ENDPOINT || "/api/triage/narrativa";
-const ASR_ENDPOINT = APP_CONFIG_RESOLVED.ASR_ENDPOINT || "/api/asr";
+const ASR_ENDPOINT = APP_CONFIG_RESOLVED.ASR_ENDPOINT || "/api/transcribir";
 const WHISPER_LANGUAGE = APP_CONFIG_RESOLVED.WHISPER_LANGUAGE || "es";
 
 // Alias para compatibilidad con tareas/spec (API.TRIAGE_ENDPOINT, etc.)
@@ -422,7 +422,7 @@ function hayEmbarazo() {
 }
 
 // 5. NARRACIÓN POR VOZ (Whisper)
-// Endpoints resueltos arriba (ASR_ENDPOINT, WHISPER_LANGUAGE desde config.js con fallback /api/asr)
+// Endpoints resueltos arriba (ASR_ENDPOINT, WHISPER_LANGUAGE desde config.js con fallback /api/transcribir)
 
 let mediaRecorder = null;
 let audioChunks = [];
@@ -494,7 +494,7 @@ async function transcribirAudio(blob) {
         output: 'txt'
     });
 
-    const endpoint = (typeof ASR_ENDPOINT !== 'undefined' && ASR_ENDPOINT) ? ASR_ENDPOINT : (API && API.ASR_ENDPOINT) || "/api/asr";
+    const endpoint = (typeof ASR_ENDPOINT !== 'undefined' && ASR_ENDPOINT) ? ASR_ENDPOINT : (API && API.ASR_ENDPOINT) || "/api/transcribir";
     const url = `${endpoint}?${params}`;
 
     try {

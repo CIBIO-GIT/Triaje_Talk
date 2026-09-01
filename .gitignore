@@ -1,6 +1,9 @@
 # Configuracion nginx por entorno (secretos/upstreams reales)
 nginx.conf
 
+# Overrides locales de config (desarrollo sin proxy con URLs absolutas)
+config.local.js
+
 # Dependencias y temporales
 .opencode
 *.log

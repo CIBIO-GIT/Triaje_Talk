@@ -1,0 +1,172 @@
+# nginx.conf.example - Reverse proxy para Triaje_Talk
+# Copiar a nginx.conf y ajustar upstreams por entorno:
+#   copy nginx.conf.example nginx.conf   (Windows)
+#   cp nginx.conf.example nginx.conf     (Linux/macOS)
+# Luego: nginx -t && nginx -s reload  (o docker compose restart nginx)
+#
+# Este archivo cubre:
+# - Servir estaticos (index.html, scripts.js, style.css, sintomas.json, LOGOS/)
+# - Proxear /api/triage/narrativa -> n8n (cloud) u Ollama local
+# - Proxear /api/transcribir -> Whisper (Docker)
+# Ver README.md seccion "Configuracion de APIs y proxy nginx" para tabla de entornos.
+
+# Upstreams parametrizables por entorno
+# Para hospital on-premise con Ollama local, cambiar el proxy_pass de /api/triage/narrativa a:
+#   proxy_pass http://ollama:11434/api/generate;
+# o
+#   proxy_pass http://n8n-interno:5678/webhook/from-ghpages;
+# Para Whisper local sin Docker (dev), usar:
+#   proxy_pass http://127.0.0.1:9000/asr;
+
+worker_processes auto;
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+
+    # Logs
+    access_log  /var/log/nginx/access.log;
+    error_log   /var/log/nginx/error.log warn;
+
+    # Performance y limites
+    sendfile        on;
+    keepalive_timeout 65;
+    client_max_body_size 1m;  # default; sobreescrito en /api/asr para audio
+
+    # Compresion para estaticos
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml;
+    gzip_min_length 1024;
+
+    # Upstream definitions (opcional, para balanceo / healthcheck futuro)
+    # upstream whisper_upstream { server whisper:9000; }
+    # upstream triage_upstream { server creactivehub.app.n8n.cloud:443; }  # solo si se usa proxy_pass con variable + resolver
+
+    server {
+        listen 80;
+        server_name _;
+
+        # Root donde se copian los estaticos (ajustar si se usa volumen Docker)
+        # Para Docker: /usr/share/nginx/html
+        # Para bare-metal: /var/www/triaje_talk o ruta del repo
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # -----------------------------------------------------------------
+        # ESTATICOS
+        # -----------------------------------------------------------------
+        location / {
+            # Sirve archivos estaticos directamente; fallback a index.html para SPA
+            try_files $uri $uri/ /index.html;
+            # Cache corto para html, largo para assets
+            location ~* \.(css|js|png|jpg|jpeg|gif|ico|json)$ {
+                expires 1h;
+                add_header Cache-Control "public, must-revalidate";
+                try_files $uri =404;
+            }
+        }
+
+        # Alias explicito para sintomas.json (opcional, ya cubierto por /)
+        # Si se desea proxificar bajo /api/sintomas, descomentar:
+        # location = /api/sintomas {
+        #     alias /usr/share/nginx/html/sintomas.json;
+        #     # o proxy_pass si sintomas viene de otro servicio
+        # }
+
+        # Alias para verificar que estaticos funcionan sin proxy
+        location = /sintomas.json {
+            try_files $uri =404;
+            add_header Cache-Control "public, max-age=3600";
+        }
+
+        # -----------------------------------------------------------------
+        # API: TRIAGE NARRATIVA -> n8n / Ollama
+        # Frontend hace: POST /api/triage/narrativa  (ver config.js TRIAGE_ENDPOINT)
+        # -----------------------------------------------------------------
+        # Opcion A: n8n cloud (actual produccion)
+        location = /api/triage/narrativa {
+            # --- SUSTITUIR POR ENTORNO ---
+            # Cloud n8n:
+            proxy_pass https://creactivehub.app.n8n.cloud/webhook/from-ghpages;
+            # Hospital on-premise con n8n interno (descomentar y comentar linea anterior):
+            # proxy_pass http://n8n-interno:5678/webhook/from-ghpages;
+            # Hospital con Ollama local (descomentar y comentar linea anterior):
+            # proxy_pass http://ollama:11434/api/generate;
+            # proxy_pass http://ollama:11434/api/chat;  # si se usa chat completion
+
+            # Timeouts y buffering para webhook JSON
+            client_max_body_size 1m;
+            proxy_read_timeout 15s;
+            proxy_send_timeout 15s;
+            proxy_connect_timeout 5s;
+
+            # Headers de proxy
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header Content-Type $content_type;
+
+            # Preservar metodo y body
+            proxy_http_version 1.1;
+            proxy_request_buffering on;
+
+            # CORS: no necesario para same-origin, pero util si se prueba cross-origin en dev
+            # add_header Access-Control-Allow-Origin "*" always;  # solo dev, quitar en prod
+            # add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+            # add_header Access-Control-Allow-Headers "Content-Type, Authorization" always;
+            # if ($request_method = OPTIONS) { return 204; }
+        }
+
+        # Variante con prefijo (si se prefiere /api/triage/* con rewrite):
+        # location /api/triage/ {
+        #     # Para /api/triage/narrativa -> /webhook/from-ghpages
+        #     rewrite ^/api/triage/narrativa$ /webhook/from-ghpages break;
+        #     proxy_pass https://creactivehub.app.n8n.cloud;
+        #     ... (mismos headers/timeouts)
+        # }
+
+        # -----------------------------------------------------------------
+        # API: ASR (Whisper) -> whisper:9000
+        # Frontend hace: POST /api/transcribir?encode=true&task=transcribe&language=es&output=txt
+        # -----------------------------------------------------------------
+        location /api/transcribir {
+            # --- SUSTITUIR POR ENTORNO ---
+            # Docker (servicio whisper en misma red):
+            proxy_pass http://whisper:9000;
+            # Dev local sin Docker (whisper corriendo en host):
+            # proxy_pass http://127.0.0.1:9000;
+
+            # Importante: preservar query string (?encode=true&...)
+            # proxy_pass sin URI preserva $request_uri automaticamente si se usa sin trailing slash
+
+            # Limites para audio (webm puede pesar varios MB, grabaciones largas)
+            client_max_body_size 20m;
+            proxy_read_timeout 60s;
+            proxy_send_timeout 60s;
+            proxy_connect_timeout 5s;
+
+            # Desactivar buffering para streaming si Whisper lo soporta
+            proxy_request_buffering off;
+            proxy_http_version 1.1;
+
+            # Headers
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+        }
+
+
+        # Denegar acceso a archivos ocultos
+        location ~ /\. {
+            deny all;
+            access_log off;
+            log_not_found off;
+        }
+    }
+}
