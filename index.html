@@ -229,6 +229,8 @@
         </form>
     </main>
 
+    <script src="config.js" onerror="console.warn('config.js no encontrado, usando rutas por defecto /api/*')"></script>
+    <script src="config.local.js" onerror="console.info('config.local.js no encontrado, usando config.js')"></script>
     <script src="scripts.js"></script>
 </body>
 

@@ -1,0 +1,9 @@
+# Configuracion nginx por entorno (secretos/upstreams reales)
+nginx.conf
+
+# Dependencias y temporales
+.opencode
+*.log
+.DS_Store
+Thumbs.db
+openspec

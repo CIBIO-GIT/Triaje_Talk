@@ -1,13 +1,35 @@
 let sintomasScore = {};
 
+// 0. CONFIGURACION CENTRALIZADA (proxy nginx)
+// Todas las URLs externas se resuelven desde window.APP_CONFIG (config.js)
+// con fallback a rutas relativas same-origin. Ver config.example.js y nginx.conf.example
+const APP_CONFIG_RESOLVED = (typeof window !== 'undefined' && window.APP_CONFIG) ? window.APP_CONFIG : {};
+const SINTOMAS_URL = APP_CONFIG_RESOLVED.SINTOMAS_URL || "sintomas.json";
+const TRIAGE_ENDPOINT = APP_CONFIG_RESOLVED.TRIAGE_ENDPOINT || "/api/triage/narrativa";
+const ASR_ENDPOINT = APP_CONFIG_RESOLVED.ASR_ENDPOINT || "/api/asr";
+const WHISPER_LANGUAGE = APP_CONFIG_RESOLVED.WHISPER_LANGUAGE || "es";
+
+// Alias para compatibilidad con tareas/spec (API.TRIAGE_ENDPOINT, etc.)
+const API = {
+    SINTOMAS_URL,
+    TRIAGE_ENDPOINT,
+    ASR_ENDPOINT,
+    WHISPER_LANGUAGE
+};
+
+console.info("[Triaje_Talk] Endpoints efectivos:", { SINTOMAS_URL, TRIAGE_ENDPOINT, ASR_ENDPOINT, WHISPER_LANGUAGE });
+
 // 1. CARGA INICIAL Y RENDERIZADO DINÁMICO
-fetch("sintomas.json")
-    .then(res => res.json())
+fetch(SINTOMAS_URL)
+    .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status} al cargar ${SINTOMAS_URL}`);
+        return res.json();
+    })
     .then(data => {
         sintomasScore = data;
         renderizarSintomas(); // Genera la Hoja 4 automáticamente
     })
-    .catch(err => console.error("Error cargando sintomas.json", err));
+    .catch(err => console.error(`Error cargando ${SINTOMAS_URL}:`, err));
 
 /**
  * Genera el HTML de la Hoja 4 basándose en el JSON.
@@ -281,7 +303,8 @@ function mostrarResultados() {
 }
 
 /**
- * Envío de datos a n8n
+ * Envío de datos a n8n / Ollama via proxy nginx
+ * Usa TRIAGE_ENDPOINT configurado (default /api/triage/narrativa)
  */
 function enviarNarrativa() {
     const formData = {
@@ -294,17 +317,40 @@ function enviarNarrativa() {
         origen: "github-pages"
     };
 
-    fetch("https://creactivehub.app.n8n.cloud/webhook/from-ghpages", {
+    const endpoint = (typeof TRIAGE_ENDPOINT !== 'undefined' && TRIAGE_ENDPOINT) ? TRIAGE_ENDPOINT : (API && API.TRIAGE_ENDPOINT) || "/api/triage/narrativa";
+    const sendBtn = document.getElementById('send-narrative-btn');
+
+    if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Enviando…';
+    }
+    // Limpiar estado previo de voz si se usa el mismo area para errores
+    // setVoiceStatus will be used for feedback on error
+
+    fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)
     })
-        .then(() => {
+        .then(async (response) => {
+            if (!response.ok) {
+                const body = await response.text().catch(() => '');
+                throw new Error(`HTTP ${response.status} ${body.slice(0, 200)}`);
+            }
             document.getElementById('narrative-buttons').style.display = 'none';
             document.getElementById('narrativa').disabled = true;
             document.getElementById('after-send-message').style.display = 'block';
+            setVoiceStatus('Narración enviada correctamente.', 'success');
         })
-        .catch(err => console.error("Error al enviar:", err));
+        .catch(err => {
+            console.error(`Error al enviar narrativa a ${endpoint}:`, err);
+            setVoiceStatus(`No se pudo enviar la narrativa a ${endpoint}. Verificá tu conexión o que el proxy esté activo. Detalle: ${err.message}`, 'error');
+            // Restaurar botón para reintento
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Enviar al Triage';
+            }
+        });
 }
 
 /**
@@ -376,10 +422,7 @@ function hayEmbarazo() {
 }
 
 // 5. NARRACIÓN POR VOZ (Whisper)
-
-// uso proxy para probar, para producción usar n8n
-const WHISPER_URL = 'http://127.0.0.1:9000/asr';
-const WHISPER_LANGUAGE = 'es';
+// Endpoints resueltos arriba (ASR_ENDPOINT, WHISPER_LANGUAGE desde config.js con fallback /api/asr)
 
 let mediaRecorder = null;
 let audioChunks = [];
@@ -451,22 +494,26 @@ async function transcribirAudio(blob) {
         output: 'txt'
     });
 
+    const endpoint = (typeof ASR_ENDPOINT !== 'undefined' && ASR_ENDPOINT) ? ASR_ENDPOINT : (API && API.ASR_ENDPOINT) || "/api/asr";
+    const url = `${endpoint}?${params}`;
+
     try {
-        const response = await fetch(`${WHISPER_URL}?${params}`, {
+        const response = await fetch(url, {
             method: 'POST',
             body: formData
         });
 
         if (!response.ok) {
-            throw new Error(`Whisper respondió ${response.status}`);
+            const body = await response.text().catch(() => '');
+            throw new Error(`HTTP ${response.status} ${body.slice(0, 200)}`);
         }
 
         const transcription = await response.text();
         document.getElementById('narrativa').value = transcription;
         setVoiceStatus('Transcripción lista. Revisá y corregí el texto antes de enviar.', 'success');
     } catch (err) {
-        console.error('Error al transcribir:', err);
-        setVoiceStatus('No se pudo transcribir el audio. Verificá que Whisper esté corriendo en el puerto 9000.', 'error');
+        console.error(`Error al transcribir via ${url}:`, err);
+        setVoiceStatus(`No se pudo transcribir el audio via ${endpoint}. Verificá que el proxy nginx y Whisper estén activos. Detalle: ${err.message}`, 'error');
     } finally {
         if (btn) {
             btn.classList.remove('recording');
