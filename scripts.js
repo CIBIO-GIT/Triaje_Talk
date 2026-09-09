@@ -2,7 +2,7 @@ let sintomasScore = {};
 
 // 0. CONFIGURACION CENTRALIZADA (proxy nginx)
 // Todas las URLs externas se resuelven desde window.APP_CONFIG (config.js)
-// con fallback a rutas relativas same-origin. Ver config.example.js y nginx.conf.example
+// con fallback a rutas relativas same-origin
 const APP_CONFIG_RESOLVED = (typeof window !== 'undefined' && window.APP_CONFIG) ? window.APP_CONFIG : {};
 const SINTOMAS_URL = APP_CONFIG_RESOLVED.SINTOMAS_URL || "sintomas.json";
 const TRIAGE_ENDPOINT = APP_CONFIG_RESOLVED.TRIAGE_ENDPOINT || "/api/triage/narrativa";
@@ -16,8 +16,6 @@ const API = {
     ASR_ENDPOINT,
     WHISPER_LANGUAGE
 };
-
-console.info("[Triaje_Talk] Endpoints efectivos:", { SINTOMAS_URL, TRIAGE_ENDPOINT, ASR_ENDPOINT, WHISPER_LANGUAGE });
 
 // 1. CARGA INICIAL Y RENDERIZADO DINÁMICO
 fetch(SINTOMAS_URL)

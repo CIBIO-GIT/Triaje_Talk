@@ -1,7 +1,5 @@
 /**
- * config.js - Configuracion por defecto (rutas relativas para proxy nginx)
- * Este archivo es versionado con defaults relativos para que GitHub Pages
- * y despliegues sin nginx personalizado funcionen.
+ * config.js - Configuracion de apis por defecto
  */
 window.APP_CONFIG = Object.assign({
   TRIAGE_ENDPOINT: "/api/triage/narrativa",
