@@ -300,55 +300,154 @@ function mostrarResultados() {
     showPage('hojaFinal');
 }
 
+
+
 /**
- * Envío de datos a n8n / Ollama via proxy nginx
- * Usa TRIAGE_ENDPOINT configurado (default /api/triage/narrativa)
+ * Envío de datos a Ollama via proxy nginx
+ * POST /api/triage/narrativa -> nginx -> Ollama /api/generate
+ * Usa TRIAGE_ENDPOINT same-origin y OLLAMA_MODEL desde window.APP_CONFIG
  */
-function enviarNarrativa() {
+async function enviarNarrativa() {
+    // Resolver endpoint dinámicamente (refleja config.local.js si fue cargado)
+    const resolvedConfig = (typeof window !== 'undefined' && window.APP_CONFIG) ? window.APP_CONFIG : {};
+    const endpoint = "/api/narrativa/api/generate";
+    const model = resolvedConfig.OLLAMA_MODEL || "llama3.2:latest";
+    const temperature = typeof resolvedConfig.OLLAMA_TEMPERATURE === 'number' ? resolvedConfig.OLLAMA_TEMPERATURE : 0.2;
+    const timeoutMs = resolvedConfig.TRIAGE_TIMEOUT_MS || 45000;
+
+    // Validaciones previas
+    if (!sintomasScore || Object.keys(sintomasScore).length === 0) {
+        setVoiceStatus('El catálogo de síntomas aún no cargó. Esperá un segundo y reintentá.', 'error');
+        return;
+    }
+    const narrativaEl = document.getElementById('narrativa');
+    const narrativaVal = narrativaEl ? narrativaEl.value.trim() : '';
+    if (!narrativaVal) {
+        setVoiceStatus('Escribí o dictá tu narrativa antes de enviar.', 'error');
+        if (narrativaEl) narrativaEl.focus();
+        return;
+    }
+    if (narrativaVal.length < 10) {
+        setVoiceStatus('La narrativa es muy corta. Describí con más detalle tus síntomas.', 'error');
+        return;
+    }
+    // Advertencia si TRIAGE_ENDPOINT apunta a localhost pero no estamos en localhost (config errónea prod)
+    if (endpoint.includes('localhost') || endpoint.includes('127.0.0.1')) {
+        const host = window.location.hostname;
+        if (host && host !== 'localhost' && host !== '127.0.0.1' && host !== '') {
+            console.warn(`TRIAGE_ENDPOINT apunta a ${endpoint} pero la página se sirve desde ${host}. Si estás en demo con nginx deberías usar "/api/triage/narrativa".`);
+        }
+    }
+
     const formData = {
         respondiente: document.querySelector('input[name="respondiente"]:checked')?.value || 'N/A',
         edad: document.getElementById('edad').value,
         sexo: document.querySelector('input[name="sexo"]:checked')?.value || 'N/A',
         embarazo: document.querySelector('input[name="embarazo"]:checked')?.value || 'no',
-        narrativa: document.getElementById('narrativa').value,
-        puntaje: document.getElementById('score-value').innerText,
-        origen: "github-pages"
+        narrativa: narrativaVal,
+        puntaje: document.getElementById('score-value').innerText
     };
 
-    const endpoint = (typeof TRIAGE_ENDPOINT !== 'undefined' && TRIAGE_ENDPOINT) ? TRIAGE_ENDPOINT : (API && API.TRIAGE_ENDPOINT) || "/api/triage/narrativa";
-    const sendBtn = document.getElementById('send-narrative-btn');
+    const catalogoStr = JSON.stringify(sintomasScore, null, 2);
+    const prompt = `[CONTEXTO]\nSos un ayudante de triage en un hospital. Los pacientes ingresan una narrativa describiendo sus síntomas y usás el protocolo Manchester para calcular el triage rápidamente.\n\n[CATALOGO PUNTAJES]\n\`\`\`json\n${catalogoStr}\n\`\`\`\n\n[OBJETIVO]\nCalcula el puntaje de triage en base a la narrativa del paciente usando el protocolo Manchester y el catálogo anterior (edad, embarazo, síntomas graves y síntomas padres/hijos).\n\n[RESTRICCIONES]\n- Responde ÚNICAMENTE con un número entero (el puntaje total). Sin texto, sin unidades, sin explicación.\n- Si no podés determinar, responde "0".\n\n[DATOS DEL PACIENTE]\n${JSON.stringify(formData, null, 2)}`;
 
+    const formModel = {
+        model: model,
+        prompt: prompt,
+        stream: false,
+        options: { temperature: temperature }
+    };
+
+    const sendBtn = document.getElementById('send-narrative-btn');
     if (sendBtn) {
         sendBtn.disabled = true;
         sendBtn.textContent = 'Enviando…';
     }
-    // Limpiar estado previo de voz si se usa el mismo area para errores
-    // setVoiceStatus will be used for feedback on error
+    setVoiceStatus('Enviando narrativa a Ollama…', '');
 
-    fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
-    })
-        .then(async (response) => {
-            if (!response.ok) {
-                const body = await response.text().catch(() => '');
-                throw new Error(`HTTP ${response.status} ${body.slice(0, 200)}`);
-            }
-            document.getElementById('narrative-buttons').style.display = 'none';
-            document.getElementById('narrativa').disabled = true;
-            document.getElementById('after-send-message').style.display = 'block';
-            setVoiceStatus('Narración enviada correctamente.', 'success');
-        })
-        .catch(err => {
-            console.error(`Error al enviar narrativa a ${endpoint}:`, err);
-            setVoiceStatus(`No se pudo enviar la narrativa a ${endpoint}. Verificá tu conexión o que el proxy esté activo. Detalle: ${err.message}`, 'error');
-            // Restaurar botón para reintento
-            if (sendBtn) {
-                sendBtn.disabled = false;
-                sendBtn.textContent = 'Enviar al Triage';
-            }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(formModel),
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            const body = await response.text().catch(() => '');
+            throw new Error(`HTTP ${response.status} ${body.slice(0, 300)}`);
+        }
+
+        const data = await response.json().catch(async () => {
+            const t = await response.text().catch(() => '');
+            throw new Error(`Respuesta no-JSON de Ollama: ${t.slice(0, 300)}`);
+        });
+
+        console.log('Ollama response:', data);
+        const rawResponse = (data.response || '').toString().trim();
+        // Ollama debe devolver solo número; extraer primer entero si viene con texto extra
+        const match = rawResponse.match(/-?\d+/);
+        const puntajeLLM = match ? parseInt(match[0], 10) : NaN;
+
+        // Actualizar UI de éxito genérico
+        document.getElementById('narrative-buttons').style.display = 'none';
+        document.getElementById('narrativa').disabled = true;
+        document.getElementById('after-send-message').style.display = 'block';
+
+        // Mostrar resultado LLM en el nuevo contenedor
+        const llmScoreEl = document.getElementById('llm-triage-score');
+        const llmLevelEl = document.getElementById('llm-triage-level');
+        const llmRawEl = document.getElementById('llm-raw-response');
+
+        if (!isNaN(puntajeLLM)) {
+            if (llmScoreEl) llmScoreEl.textContent = String(puntajeLLM);
+            // Reusar lógica de niveles de mostrarResultados()
+            let levelText = "";
+            let levelColor = "";
+            if (puntajeLLM >= 40) { levelText = "🔴 Rojo (Atención Inmediata)"; levelColor = "#e74c3c"; }
+            else if (puntajeLLM >= 20) { levelText = "🟠 Naranja (Urgencia)"; levelColor = "#e67e22"; }
+            else if (puntajeLLM >= 10) { levelText = "🟡 Amarillo (Diferible)"; levelColor = "#f1c40f"; }
+            else if (puntajeLLM >= 3) { levelText = "🟢 Verde (No Urgente)"; levelColor = "#2ecc71"; }
+            else { levelText = "🔵 Azul (Consulta General)"; levelColor = "#3498db"; }
+            if (llmLevelEl) {
+                llmLevelEl.textContent = levelText;
+                llmLevelEl.style.color = levelColor;
+            }
+            if (llmRawEl) llmRawEl.textContent = `Respuesta LLM: "${rawResponse}"`;
+            setVoiceStatus(`Narración enviada. Puntaje Ollama: ${puntajeLLM} – ${levelText}`, 'success');
+        } else {
+            if (llmScoreEl) llmScoreEl.textContent = '—';
+            if (llmLevelEl) llmLevelEl.textContent = 'Respuesta no numérica';
+            if (llmRawEl) llmRawEl.textContent = `Respuesta LLM: "${rawResponse.slice(0, 500)}"`;
+            setVoiceStatus(`Narración enviada pero Ollama no devolvió un puntaje numérico. Respuesta: "${rawResponse.slice(0, 200)}"`, 'error');
+        }
+
+        // Advertencia si usó fallback localhost en prod (ya logueado)
+        if (endpoint.includes('localhost') && window.location.hostname !== 'localhost') {
+            console.warn('Revisá config.js: en demo con nginx el endpoint debe ser relativo "/api/triage/narrativa".');
+        }
+
+    } catch (err) {
+        clearTimeout(timeoutId);
+        console.error(`Error al enviar narrativa a ${endpoint}:`, err);
+        let userMsg = err.message || String(err);
+        if (err.name === 'AbortError') {
+            userMsg = `Tiempo agotado tras ${Math.round(timeoutMs / 1000)}s. Ollama puede estar cargando el modelo (cold start). Reintentá en 10-20s.`;
+        } else if (userMsg.includes('Failed to fetch') || userMsg.includes('NetworkError')) {
+            userMsg = `No se pudo conectar a ${endpoint}. Verificá que nginx esté corriendo y que Ollama esté en http://ollama:11434 (o 127.0.0.1:11434). Detalle: ${err.message}`;
+        }
+        setVoiceStatus(`No se pudo enviar la narrativa a ${endpoint}. ${userMsg}`, 'error');
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.textContent = 'Enviar al Triage';
+        }
+    }
+    TRIAGE_ENDPOINT
 }
 
 /**
@@ -360,6 +459,15 @@ function reiniciarEncuesta() {
     document.getElementById('narrativa').disabled = false;
     document.getElementById('narrative-buttons').style.display = 'block';
     document.getElementById('after-send-message').style.display = 'none';
+    // Limpiar resultado LLM previo
+    const llmScoreEl = document.getElementById('llm-triage-score');
+    const llmLevelEl = document.getElementById('llm-triage-level');
+    const llmRawEl = document.getElementById('llm-raw-response');
+    if (llmScoreEl) llmScoreEl.textContent = '—';
+    if (llmLevelEl) { llmLevelEl.textContent = ''; llmLevelEl.style.color = ''; }
+    if (llmRawEl) llmRawEl.textContent = '';
+    const sendBtn = document.getElementById('send-narrative-btn');
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Enviar al Triage'; }
 
     // Resetear el estado del botón de voz
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {

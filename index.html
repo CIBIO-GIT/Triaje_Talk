@@ -207,8 +207,13 @@
                 </div>
 
                 <div id="after-send-message" style="display: none; text-align: center; margin-top: 20px;">
-                    <p style="font-weight: bold; color: #28a745;">✅ Narración enviada. Recibirás una respuesta pronto.
-                    </p>
+                    <p style="font-weight: bold; color: #28a745;">✅ Narración enviada. Respuesta de Ollama:</p>
+                    <div id="llm-result-panel" style="margin: 14px auto; max-width: 420px; padding: 18px; border-radius: 16px; background: #f8fbfe; border: 1px solid #cfe3f4;">
+                        <div style="font-size: 0.9rem; color: #5a728a;">Puntaje Ollama</div>
+                        <div id="llm-triage-score" style="font-size: 2.4rem; font-weight: 900; color: #17324d; margin: 6px 0;">—</div>
+                        <div id="llm-triage-level" style="font-weight: 800; margin-bottom: 8px;"></div>
+                        <div id="llm-raw-response" style="font-size: 0.82rem; color: #5a728a; word-break: break-word; font-style: italic;"></div>
+                    </div>
                     <button type="button" onclick="reiniciarEncuesta()"
                         style="background-color: #007bff; color: white;">Nuevo Triaje</button>
                 </div>
