@@ -257,54 +257,231 @@ function calculateScore() {
 
 
 /**
- * Muestra los resultados finales según el puntaje
+ * Mapea puntaje a nivel Manchester (fuente única de verdad)
+ */
+function getNivelTriage(score) {
+    if (score >= 40) return { text: "🔴 Rojo (Atención Inmediata)", color: "#e74c3c", nivel: "Rojo" };
+    if (score >= 20) return { text: "🟠 Naranja (Urgencia)", color: "#e67e22", nivel: "Naranja" };
+    if (score >= 10) return { text: "🟡 Amarillo (Diferable)", color: "#f1c40f", nivel: "Amarillo" };
+    if (score >= 3) return { text: "🟢 Verde (No Urgente)", color: "#2ecc71", nivel: "Verde" };
+    return { text: "🔵 Azul (Consulta General)", color: "#3498db", nivel: "Azul" };
+}
+
+/**
+ * Muestra los resultados finales según el puntaje (flujo estructurado)
  */
 function mostrarResultados() {
     calculateScore();
     const finalScore = parseInt(document.getElementById('score-value').innerText);
     document.getElementById('final-score-value').innerText = finalScore;
 
-    let levelText = "";
-    let levelColor = "";
-
-    if (finalScore >= 40) { levelText = "🔴 Rojo (Atención Inmediata)"; levelColor = "#e74c3c"; }
-    else if (finalScore >= 20) { levelText = "🟠 Naranja (Urgencia)"; levelColor = "#e67e22"; }
-    else if (finalScore >= 10) { levelText = "🟡 Amarillo (Diferable)"; levelColor = "#f1c40f"; }
-    else if (finalScore >= 3) { levelText = "🟢 Verde (No Urgente)"; levelColor = "#2ecc71"; }
-    else { levelText = "🔵 Azul (Consulta General)"; levelColor = "#3498db"; }
+    const { text: levelText, color: levelColor } = getNivelTriage(finalScore);
 
     const triageElement = document.getElementById('final-triage-level');
     triageElement.innerHTML = levelText;
     triageElement.style.color = levelColor;
 
+    console.log("[Triage] origen: formulario-estructurado", { puntaje: finalScore, nivel: getNivelTriage(finalScore).nivel });
+
     showPage('hojaFinal');
 }
 
+// Endpoint Gemini vía proxy reverso (inyecta x-goog-api-key, no expone key en browser)
+const TRIAGE_API_URL = "/api/generar-triage";
+
 /**
- * Envío de datos a n8n
+ * Construye el prompt que se inyecta en el browser (nginx solo hace proxy_pass + header).
+ * Incluye narrativa + datos demográficos + sintomas.json completo para que Gemini calcule puntaje.
  */
-function enviarNarrativa() {
-    const formData = {
+function construirPromptTriage({ edad, sexo, embarazo, sintomas_graves, respondiente, narrativa }) {
+    return `Eres un clasificador de triage Manchester para el Hospital San José.
+
+TAREA:
+- Mapea la narrativa del paciente a los IDs de sintomas.json y calcula el puntaje total.
+- Suma: edad según config_puntajes.edad + embarazo (30 si "si") + graves (50 si "si") + scores de síntomas padres e hijos (ej: p_dolor 3 + dolor_pecho 20).
+- Umbrales fijos: >=40 Rojo (Atención Inmediata), >=20 Naranja (Urgencia), >=10 Amarillo (Diferible), >=3 Verde (No Urgente), <3 Azul (Consulta General).
+- Devuelve SOLO JSON válido con {"puntaje": int 0-100, "nivel": "Rojo|Naranja|Amarillo|Verde|Azul"} sin markdown ni texto extra.
+- No inventes síntomas no mencionados. Sé conservador si la narrativa es ambigua.
+
+DATOS DEL PACIENTE:
+- Respondiente: ${respondiente}
+- Edad: ${edad}
+- Sexo: ${sexo}
+- Embarazo: ${embarazo}
+- Síntomas graves (hoja3): ${sintomas_graves}
+- Narrativa: """${narrativa}"""
+
+SINTOMAS.JSON (baremo oficial):
+${JSON.stringify(sintomasScore, null, 2)}`;
+}
+
+/**
+ * Parsea respuesta de Gemini en múltiples formatos posibles.
+ * Soporta generateContent {candidates[0].content.parts[0].text} y fallback interactions {output}.
+ */
+function parsearRespuestaGemini(raw) {
+    let text = null;
+
+    // Formato oficial generateContent
+    if (raw.candidates && raw.candidates[0]?.content?.parts?.[0]?.text) {
+        text = raw.candidates[0].content.parts[0].text;
+    } else if (typeof raw.output === "string") {
+        text = raw.output;
+    } else if (typeof raw.output_text === "string") {
+        text = raw.output_text;
+    } else if (typeof raw.text === "string") {
+        text = raw.text;
+    } else if (typeof raw === "string") {
+        text = raw;
+    }
+
+    if (!text) {
+        // Intento: el proxy ya devolvió JSON directo {puntaje, nivel}
+        if (typeof raw.puntaje !== "undefined" && raw.nivel) {
+            return { puntaje: raw.puntaje, nivel: raw.nivel, raw };
+        }
+        throw new Error("Formato de respuesta Gemini no reconocido");
+    }
+
+    // Limpiar posible markdown ```json ... ```
+    const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+
+    // Extraer JSON si viene con texto adicional
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    const jsonStr = jsonMatch ? jsonMatch[0] : cleaned;
+
+    const parsed = JSON.parse(jsonStr);
+    if (typeof parsed.puntaje === "undefined" || !parsed.nivel) {
+        throw new Error("Respuesta Gemini sin puntaje/nivel");
+    }
+    return { puntaje: parsed.puntaje, nivel: parsed.nivel, raw };
+}
+
+/**
+ * Envío de narrativa a Gemini vía /api/generar-triage (prompt inyectado en browser).
+ * Renderiza resultado en hojaFinal igual que el flujo estructurado.
+ */
+async function enviarNarrativa() {
+    const narrativaEl = document.getElementById('narrativa');
+    const narrativa = narrativaEl.value.trim();
+    const errorEl = document.getElementById('narrative-error');
+    const loadingEl = document.getElementById('narrative-loading');
+    const sendBtn = document.getElementById('send-narrative-btn');
+    const voiceBtn = document.getElementById('voice-narrative-btn');
+
+    if (errorEl) errorEl.textContent = "";
+
+    if (narrativa.length < 10) {
+        if (errorEl) errorEl.textContent = "Describí tus síntomas con más detalle (mínimo 10 caracteres).";
+        else setVoiceStatus("Describí tus síntomas con más detalle (mínimo 10 caracteres).", "error");
+        return;
+    }
+
+    if (Object.keys(sintomasScore).length === 0) {
+        if (errorEl) errorEl.textContent = "Aún se está cargando el baremo de síntomas. Intentá de nuevo en unos segundos.";
+        return;
+    }
+
+    const datos = {
         respondiente: document.querySelector('input[name="respondiente"]:checked')?.value || 'N/A',
-        edad: document.getElementById('edad').value,
+        edad: parseInt(document.getElementById('edad').value) || 0,
         sexo: document.querySelector('input[name="sexo"]:checked')?.value || 'N/A',
         embarazo: document.querySelector('input[name="embarazo"]:checked')?.value || 'no',
-        narrativa: document.getElementById('narrativa').value,
-        puntaje: document.getElementById('score-value').innerText,
-        origen: "github-pages"
+        sintomas_graves: document.querySelector('input[name="sintomas_graves"]:checked')?.value || 'no',
+        narrativa
     };
 
-    fetch("https://creactivehub.app.n8n.cloud/webhook/from-ghpages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
-    })
-        .then(() => {
-            document.getElementById('narrative-buttons').style.display = 'none';
-            document.getElementById('narrativa').disabled = true;
-            document.getElementById('after-send-message').style.display = 'block';
-        })
-        .catch(err => console.error("Error al enviar:", err));
+    const prompt = construirPromptTriage(datos);
+
+    // Payload Gemini generateContent (proxy hace pass-through + inyecta x-goog-api-key)
+    const geminiBody = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+            temperature: 0.2,
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: "object",
+                properties: {
+                    puntaje: { type: "integer", description: "Puntaje total 0-100" },
+                    nivel: { type: "string", enum: ["Rojo", "Naranja", "Amarillo", "Verde", "Azul"] }
+                },
+                required: ["puntaje", "nivel"]
+            }
+        }
+    };
+
+    // UI loading
+    if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.textContent = "Evaluando...";
+    }
+    if (voiceBtn) voiceBtn.disabled = true;
+    if (narrativaEl) narrativaEl.disabled = true;
+    if (loadingEl) loadingEl.style.display = "block";
+    setVoiceStatus("Evaluando prioridad con IA...", "");
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    try {
+        const response = await fetch(TRIAGE_API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(geminiBody),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            const errText = await response.text().catch(() => "");
+            throw new Error(`API respondió ${response.status} ${errText.slice(0, 200)}`);
+        }
+
+        const raw = await response.json();
+        const { puntaje: puntajeRaw } = parsearRespuestaGemini(raw);
+
+        let puntaje = parseInt(puntajeRaw, 10);
+        if (isNaN(puntaje)) throw new Error("Puntaje no numérico");
+        puntaje = Math.max(0, Math.min(100, puntaje));
+
+        // Fuente única de verdad para nivel/color (evita alucinación)
+        const { text: levelText, color: levelColor, nivel } = getNivelTriage(puntaje);
+
+        // Actualizar displays (header + hojaFinal)
+        const scoreDisplay = document.getElementById('score-value');
+        if (scoreDisplay) scoreDisplay.innerText = puntaje;
+        document.getElementById('final-score-value').innerText = puntaje;
+        const triageEl = document.getElementById('final-triage-level');
+        triageEl.innerHTML = levelText;
+        triageEl.style.color = levelColor;
+
+        console.log("[Triage] origen: IA-narrativa", { puntaje, nivel, raw });
+
+        showPage('hojaFinal');
+    } catch (err) {
+        clearTimeout(timeoutId);
+        console.error("Error al evaluar con Gemini:", err);
+        const msg = err.name === "AbortError"
+            ? "La evaluación tardó demasiado. Verificá tu conexión y reintentá."
+            : "No se pudo evaluar la narrativa. Verificá que el proxy /api/generar-triage esté activo y reintentá.";
+        if (errorEl) errorEl.textContent = msg;
+        setVoiceStatus(msg, "error");
+    } finally {
+        if (loadingEl) loadingEl.style.display = "none";
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.textContent = "Enviar al Triage";
+        }
+        if (voiceBtn) voiceBtn.disabled = false;
+        if (narrativaEl) narrativaEl.disabled = false;
+        setVoiceStatus("", "");
+        // Limpiar loading extra si quedó
+        const statusEl = document.getElementById('voice-status');
+        if (statusEl && statusEl.textContent === "Evaluando prioridad con IA...") {
+            setVoiceStatus("", "");
+        }
+    }
 }
 
 /**
@@ -313,9 +490,21 @@ function enviarNarrativa() {
 function reiniciarEncuesta() {
     document.getElementById('multiStepForm').reset();
     document.getElementById('score-display').style.display = 'block';
-    document.getElementById('narrativa').disabled = false;
-    document.getElementById('narrative-buttons').style.display = 'block';
-    document.getElementById('after-send-message').style.display = 'none';
+    const narrativaEl = document.getElementById('narrativa');
+    if (narrativaEl) narrativaEl.disabled = false;
+    const nb = document.getElementById('narrative-buttons');
+    if (nb) nb.style.display = 'flex';
+    const afterMsg = document.getElementById('after-send-message');
+    if (afterMsg) afterMsg.style.display = 'none';
+    const errEl = document.getElementById('narrative-error');
+    if (errEl) errEl.textContent = '';
+    const loadingEl = document.getElementById('narrative-loading');
+    if (loadingEl) loadingEl.style.display = 'none';
+    const sendBtn = document.getElementById('send-narrative-btn');
+    if (sendBtn) {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Enviar al Triage';
+    }
 
     // Resetear el estado del botón de voz
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {

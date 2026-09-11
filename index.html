@@ -198,19 +198,14 @@
                         Narrar sintomas con voz
                     </button>
                     <p id="voice-status" class="voice-status"></p>
+                    <p id="narrative-error" class="login-error"></p>
+                    <div id="narrative-loading" style="display:none; text-align:center; margin-top:12px; font-weight:600; color: var(--accent);">⏳ Evaluando prioridad con IA...</div>
                 </fieldset>
 
                 <div id="narrative-buttons" class="nav-buttons">
                     <button type="button" onclick="showPage('hoja2')">&larr; Anterior</button>
                     <button type="button" id="send-narrative-btn" onclick="enviarNarrativa()"
                         class="submit-button">Enviar al Triage</button>
-                </div>
-
-                <div id="after-send-message" style="display: none; text-align: center; margin-top: 20px;">
-                    <p style="font-weight: bold; color: #28a745;">✅ Narración enviada. Recibirás una respuesta pronto.
-                    </p>
-                    <button type="button" onclick="reiniciarEncuesta()"
-                        style="background-color: #007bff; color: white;">Nuevo Triaje</button>
                 </div>
             </div>
 
